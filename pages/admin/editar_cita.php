@@ -1,0 +1,256 @@
+<?php
+require_once '../../includes/verificar_sesion.php';
+require_once '../../config/database.php';
+
+verificarRol(['Administrador']);
+
+$database = new Database();
+$db = $database->getConnection();
+
+$cita_id = $_GET['id'] ?? null;
+
+if (!$cita_id) {
+    header("Location: citas.php");
+    exit();
+}
+
+// Obtener datos de la cita
+$query = "SELECT c.*, 
+          u1.nombre as cliente_nombre,
+          u2.nombre as empleado_nombre,
+          s.nombre as servicio_nombre
+          FROM citas c
+          JOIN usuarios u1 ON c.cliente_id = u1.id
+          JOIN usuarios u2 ON c.empleado_id = u2.id
+          JOIN servicios s ON c.servicio_id = s.id
+          WHERE c.id = :id";
+
+$stmt = $db->prepare($query);
+$stmt->bindParam(':id', $cita_id);
+$stmt->execute();
+$cita = $stmt->fetch();
+
+if (!$cita) {
+    header("Location: citas.php?error=not_found");
+    exit();
+}
+
+// Obtener clientes, empleados y servicios
+$clientes = $db->query("SELECT id, nombre, email FROM usuarios WHERE rol='Cliente' AND activo=1 ORDER BY nombre")->fetchAll();
+$empleados = $db->query("SELECT id, nombre FROM usuarios WHERE rol='Empleado' AND activo=1 ORDER BY nombre")->fetchAll();
+$servicios = $db->query("SELECT id, nombre, precio, duracion FROM servicios WHERE activo=1 ORDER BY nombre")->fetchAll();
+?>
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Editar Cita - Salón de Belleza</title>
+    <link rel="stylesheet" href="../../assets/admin_styles.css">
+    <style>
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .alert {
+            padding: 12px 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+
+        .alert-danger {
+            background-color: #fee;
+            color: #c33;
+            border: 1px solid #fcc;
+        }
+
+        .help-text {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+        }
+
+        .info-box {
+            background: #f0f9ff;
+            border: 2px solid #0ea5e9;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+
+        .info-box h3 {
+            color: #0369a1;
+            margin-bottom: 10px;
+        }
+
+        #precio-total {
+            font-size: 24px;
+            font-weight: bold;
+            color: #10b981;
+        }
+
+        @media (max-width: 768px) {
+            .form-row {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="header-content">
+            <h1>✏️ Editar Cita #<?php echo $cita['id']; ?></h1>
+            <a href="citas.php" class="btn-back">← Volver</a>
+        </div>
+    </div>
+
+    <div class="container">
+        <?php if (isset($_GET['error'])): ?>
+            <div class="alert alert-danger">
+                <?php
+                switch($_GET['error']) {
+                    case 'required':
+                        echo "❌ Por favor completa todos los campos obligatorios";
+                        break;
+                    case 'horario_ocupado':
+                        echo "❌ El horario seleccionado ya está ocupado";
+                        break;
+                    default:
+                        echo "❌ Error al actualizar la cita";
+                }
+                ?>
+            </div>
+        <?php endif; ?>
+
+        <div class="form-container">
+            <form action="procesar_cita.php" method="POST" onsubmit="return validateForm()">
+                <input type="hidden" name="accion" value="editar">
+                <input type="hidden" name="cita_id" value="<?php echo $cita['id']; ?>">
+
+                <div class="form-group">
+                    <label for="cliente_id">Cliente *</label>
+                    <select id="cliente_id" name="cliente_id" required>
+                        <option value="">-- Selecciona un cliente --</option>
+                        <?php foreach ($clientes as $cliente): ?>
+                            <option value="<?php echo $cliente['id']; ?>" <?php echo $cliente['id'] == $cita['cliente_id'] ? 'selected' : ''; ?>>
+                                <?php echo htmlspecialchars($cliente['nombre']) . ' (' . htmlspecialchars($cliente['email']) . ')'; ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="servicio_id">Servicio *</label>
+                    <select id="servicio_id" name="servicio_id" required onchange="actualizarPrecio()">
+                        <option value="">-- Selecciona un servicio --</option>
+                        <?php foreach ($servicios as $servicio): ?>
+                            <option 
+                                value="<?php echo $servicio['id']; ?>" 
+                                data-precio="<?php echo $servicio['precio']; ?>"
+                                data-duracion="<?php echo $servicio['duracion']; ?>"
+                                <?php echo $servicio['id'] == $cita['servicio_id'] ? 'selected' : ''; ?>
+                            >
+                                <?php echo htmlspecialchars($servicio['nombre']); ?> - 
+                                $<?php echo number_format($servicio['precio'], 2); ?> 
+                                (<?php echo $servicio['duracion']; ?> min)
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="empleado_id">Empleado *</label>
+                    <select id="empleado_id" name="empleado_id" required>
+                        <option value="">-- Selecciona un empleado --</option>
+                        <?php foreach ($empleados as $empleado): ?>
+                            <option value="<?php echo $empleado['id']; ?>" <?php echo $empleado['id'] == $cita['empleado_id'] ? 'selected' : ''; ?>>
+                                <?php echo htmlspecialchars($empleado['nombre']); ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="fecha_cita">Fecha *</label>
+                        <input 
+                            type="date" 
+                            id="fecha_cita" 
+                            name="fecha_cita" 
+                            required
+                            value="<?php echo $cita['fecha_cita']; ?>"
+                        >
+                    </div>
+
+                    <div class="form-group">
+                        <label for="hora_cita">Hora *</label>
+                        <input 
+                            type="time" 
+                            id="hora_cita" 
+                            name="hora_cita" 
+                            required
+                            step="900"
+                            value="<?php echo substr($cita['hora_cita'], 0, 5); ?>"
+                        >
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="estado">Estado de la Cita *</label>
+                    <select id="estado" name="estado" required>
+                        <option value="Pendiente" <?php echo $cita['estado'] == 'Pendiente' ? 'selected' : ''; ?>>Pendiente</option>
+                        <option value="Confirmada" <?php echo $cita['estado'] == 'Confirmada' ? 'selected' : ''; ?>>Confirmada</option>
+                        <option value="Completada" <?php echo $cita['estado'] == 'Completada' ? 'selected' : ''; ?>>Completada</option>
+                        <option value="Cancelada" <?php echo $cita['estado'] == 'Cancelada' ? 'selected' : ''; ?>>Cancelada</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="notas">Notas Adicionales</label>
+                    <textarea id="notas" name="notas" rows="3"><?php echo htmlspecialchars($cita['notas'] ?? ''); ?></textarea>
+                </div>
+
+                <div class="info-box">
+                    <h3>💰 Precio Total</h3>
+                    <div id="precio-total">$<?php echo number_format($cita['precio_total'], 2); ?></div>
+                    <input type="hidden" id="precio_total_hidden" name="precio_total" value="<?php echo $cita['precio_total']; ?>">
+                </div>
+
+                <button type="submit" class="btn-primary">💾 Guardar Cambios</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        function actualizarPrecio() {
+            const servicioSelect = document.getElementById('servicio_id');
+            const selectedOption = servicioSelect.options[servicioSelect.selectedIndex];
+            const precio = selectedOption.dataset.precio || 0;
+            
+            document.getElementById('precio-total').textContent = '$' + parseFloat(precio).toFixed(2);
+            document.getElementById('precio_total_hidden').value = precio;
+        }
+
+        function validateForm() {
+            const fecha = document.getElementById('fecha_cita').value;
+            const hora = document.getElementById('hora_cita').value;
+            const precio = document.getElementById('precio_total_hidden').value;
+
+            if (!fecha || !hora) {
+                alert('Por favor completa la fecha y hora de la cita');
+                return false;
+            }
+
+            if (parseFloat(precio) <= 0) {
+                alert('Por favor selecciona un servicio válido');
+                return false;
+            }
+
+            return true;
+        }
+    </script>
+</body>
+</html>
