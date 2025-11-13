@@ -20,8 +20,14 @@ if ($servicio_id) {
     $servicio = $stmt->fetch();
 }
 
-// Obtener empleados activos
-$query = "SELECT id, nombre FROM usuarios WHERE rol = 'Empleado' AND activo = 1 ORDER BY nombre";
+// Obtener empleados activos con sus horarios
+$query = "SELECT DISTINCT u.id, u.nombre 
+          FROM usuarios u
+          INNER JOIN horarios_empleados h ON u.id = h.empleado_id
+          WHERE u.rol = 'Empleado' 
+          AND u.activo = 1 
+          AND h.activo = 1
+          ORDER BY u.nombre";
 $stmt = $db->query($query);
 $empleados = $stmt->fetchAll();
 ?>
@@ -175,11 +181,13 @@ $empleados = $stmt->fetchAll();
             text-align: center;
             font-weight: 500;
             transition: all 0.3s;
+            font-size: 14px;
         }
 
-        .horario-btn:hover {
+        .horario-btn:hover:not(.disabled) {
             border-color: #667eea;
             background: #f0f4ff;
+            transform: translateY(-2px);
         }
 
         .horario-btn.selected {
@@ -207,7 +215,7 @@ $empleados = $stmt->fetchAll();
             transition: all 0.3s;
         }
 
-        .btn-primary:hover {
+        .btn-primary:hover:not(:disabled) {
             transform: translateY(-2px);
             box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
         }
@@ -231,10 +239,16 @@ $empleados = $stmt->fetchAll();
             border: 1px solid #fcc;
         }
 
-        .alert-success {
-            background-color: #efe;
-            color: #3c3;
-            border: 1px solid #cfc;
+        .alert-info {
+            background-color: #e0f2fe;
+            color: #075985;
+            border: 1px solid #7dd3fc;
+        }
+
+        .alert-warning {
+            background-color: #fef3c7;
+            color: #92400e;
+            border: 1px solid #fbbf24;
         }
 
         .loading {
@@ -243,8 +257,46 @@ $empleados = $stmt->fetchAll();
             color: #666;
         }
 
+        .loading::after {
+            content: '...';
+            animation: dots 1.5s steps(4, end) infinite;
+        }
+
+        @keyframes dots {
+            0%, 20% { content: '.'; }
+            40% { content: '..'; }
+            60%, 100% { content: '...'; }
+        }
+
         #horarios-container {
             display: none;
+        }
+
+        .info-message {
+            background: #f0f9ff;
+            border-left: 4px solid #0ea5e9;
+            padding: 12px 15px;
+            margin: 10px 0;
+            border-radius: 4px;
+            font-size: 14px;
+            color: #0c4a6e;
+        }
+
+        .help-text {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+        }
+
+        @media (max-width: 600px) {
+            .horarios-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+            
+            .service-details {
+                flex-direction: column;
+                gap: 15px;
+            }
         }
     </style>
 </head>
@@ -262,16 +314,19 @@ $empleados = $stmt->fetchAll();
                 <?php
                 switch($_GET['error']) {
                     case 'required':
-                        echo "❌ Por favor completa todos los campos";
+                        echo "❌ Por favor completa todos los campos requeridos";
                         break;
                     case 'horario_ocupado':
-                        echo "❌ El horario seleccionado ya no está disponible";
+                        echo "❌ El horario seleccionado ya no está disponible. Por favor, elige otro horario.";
                         break;
                     case 'invalid_date':
                         echo "❌ La fecha seleccionada no es válida";
                         break;
+                    case 'no_disponible':
+                        echo "❌ El empleado seleccionado no está disponible en esa fecha";
+                        break;
                     default:
-                        echo "❌ Error al agendar la cita";
+                        echo "❌ Error al agendar la cita. Intenta nuevamente.";
                 }
                 ?>
             </div>
@@ -281,8 +336,12 @@ $empleados = $stmt->fetchAll();
             <div class="form-container">
                 <div class="service-info">
                     <h3>📋 Servicio Seleccionado</h3>
-                    <p style="font-size: 18px; margin-top: 10px;"><?php echo htmlspecialchars($servicio['nombre']); ?></p>
-                    <p style="color: #666; margin-top: 5px;"><?php echo htmlspecialchars($servicio['descripcion']); ?></p>
+                    <p style="font-size: 18px; margin-top: 10px; font-weight: 600;">
+                        <?php echo htmlspecialchars($servicio['nombre']); ?>
+                    </p>
+                    <p style="color: #666; margin-top: 5px;">
+                        <?php echo htmlspecialchars($servicio['descripcion']); ?>
+                    </p>
                     
                     <div class="service-details">
                         <div class="service-detail">
@@ -300,36 +359,52 @@ $empleados = $stmt->fetchAll();
                     <input type="hidden" name="servicio_id" value="<?php echo $servicio['id']; ?>">
                     <input type="hidden" name="precio_total" value="<?php echo $servicio['precio']; ?>">
                     <input type="hidden" id="hora_seleccionada" name="hora_cita" value="">
+                    <input type="hidden" id="duracion_servicio" value="<?php echo $servicio['duracion']; ?>">
 
                     <div class="form-group">
-                        <label for="empleado_id">Selecciona un Profesional *</label>
-                        <select id="empleado_id" name="empleado_id" required onchange="cargarHorarios()">
-                            <option value="">-- Selecciona un profesional --</option>
+                        <label for="empleado_id">
+                            👤 Selecciona tu Profesional Preferido *
+                        </label>
+                        <select id="empleado_id" name="empleado_id" required onchange="resetearHorarios(); cargarHorarios()">
+                            <option value="">-- Elige un profesional --</option>
                             <?php foreach ($empleados as $empleado): ?>
                                 <option value="<?php echo $empleado['id']; ?>">
                                     <?php echo htmlspecialchars($empleado['nombre']); ?>
                                 </option>
                             <?php endforeach; ?>
                         </select>
+                        <div class="help-text">
+                            Todos nuestros profesionales están altamente capacitados
+                        </div>
                     </div>
 
                     <div class="form-group">
-                        <label for="fecha_cita">Fecha de la Cita *</label>
+                        <label for="fecha_cita">
+                            📆 Selecciona la Fecha *
+                        </label>
                         <input 
                             type="date" 
                             id="fecha_cita" 
                             name="fecha_cita" 
                             required
                             min="<?php echo date('Y-m-d'); ?>"
-                            onchange="cargarHorarios()"
+                            max="<?php echo date('Y-m-d', strtotime('+3 months')); ?>"
+                            onchange="resetearHorarios(); cargarHorarios()"
                         >
+                        <div class="help-text">
+                            Puedes agendar hasta 3 meses por adelantado
+                        </div>
                     </div>
 
                     <div id="horarios-container">
                         <div class="form-group">
-                            <label>Horarios Disponibles *</label>
+                            <label>
+                                🕐 Horarios Disponibles *
+                            </label>
                             <div id="horarios-loading" class="loading">
-                                Cargando horarios disponibles...
+                                Cargando horarios disponibles
+                            </div>
+                            <div id="mensaje-info" class="info-message" style="display: none;">
                             </div>
                             <div id="horarios-grid" class="horarios-grid" style="display: none;">
                             </div>
@@ -337,13 +412,18 @@ $empleados = $stmt->fetchAll();
                     </div>
 
                     <div class="form-group">
-                        <label for="notas">Notas Adicionales (Opcional)</label>
+                        <label for="notas">
+                            📝 Notas o Comentarios Especiales (Opcional)
+                        </label>
                         <textarea 
                             id="notas" 
                             name="notas" 
                             rows="4"
-                            placeholder="Ej: Preferencias especiales, alergias, etc."
+                            placeholder="Ej: Tengo alergia a ciertos productos, prefiero un estilo específico, etc."
                         ></textarea>
+                        <div class="help-text">
+                            Cualquier información que nos ayude a brindarte un mejor servicio
+                        </div>
                     </div>
 
                     <button type="submit" class="btn-primary" id="btn-submit" disabled>
@@ -355,27 +435,38 @@ $empleados = $stmt->fetchAll();
             <div class="alert alert-danger">
                 ❌ Servicio no encontrado o no disponible
             </div>
-            <a href="dashboard.php" class="btn-back" style="display: inline-block; margin-top: 20px;">← Volver al inicio</a>
+            <a href="dashboard.php" class="btn-back" style="display: inline-block; margin-top: 20px;">
+                ← Volver al inicio
+            </a>
         <?php endif; ?>
     </div>
 
     <script>
         let horaSeleccionada = null;
 
+        function resetearHorarios() {
+            horaSeleccionada = null;
+            document.getElementById('hora_seleccionada').value = '';
+            document.getElementById('horarios-container').style.display = 'none';
+            document.getElementById('horarios-grid').style.display = 'none';
+            document.getElementById('mensaje-info').style.display = 'none';
+            document.getElementById('btn-submit').disabled = true;
+        }
+
         function cargarHorarios() {
             const empleadoId = document.getElementById('empleado_id').value;
             const fechaCita = document.getElementById('fecha_cita').value;
-            const servicioId = <?php echo $servicio_id; ?>;
-            const duracion = <?php echo $servicio['duracion']; ?>;
+            const duracion = document.getElementById('duracion_servicio').value;
 
             if (!empleadoId || !fechaCita) {
-                document.getElementById('horarios-container').style.display = 'none';
+                resetearHorarios();
                 return;
             }
 
             document.getElementById('horarios-container').style.display = 'block';
             document.getElementById('horarios-loading').style.display = 'block';
             document.getElementById('horarios-grid').style.display = 'none';
+            document.getElementById('mensaje-info').style.display = 'none';
 
             // Hacer petición AJAX para obtener horarios disponibles
             fetch(`obtener_horarios_disponibles.php?empleado_id=${empleadoId}&fecha=${fechaCita}&duracion=${duracion}`)
@@ -383,20 +474,27 @@ $empleados = $stmt->fetchAll();
                 .then(data => {
                     document.getElementById('horarios-loading').style.display = 'none';
                     
-                    if (data.success && data.horarios.length > 0) {
-                        mostrarHorarios(data.horarios);
+                    if (data.success) {
+                        if (data.horarios && data.horarios.length > 0) {
+                            mostrarHorarios(data.horarios);
+                            
+                            // Mostrar mensaje informativo
+                            const mensaje = document.getElementById('mensaje-info');
+                            mensaje.textContent = `✨ ${data.empleado} tiene ${data.horarios.length} horarios disponibles para este día`;
+                            mensaje.style.display = 'block';
+                        } else {
+                            // No hay horarios disponibles
+                            const mensaje = data.message || 'No hay horarios disponibles para esta fecha';
+                            mostrarMensajeSinHorarios(mensaje);
+                        }
                     } else {
-                        document.getElementById('horarios-grid').innerHTML = 
-                            '<p style="grid-column: 1/-1; text-align: center; color: #999;">No hay horarios disponibles para esta fecha</p>';
-                        document.getElementById('horarios-grid').style.display = 'block';
+                        mostrarError(data.message || 'Error al cargar horarios');
                     }
                 })
                 .catch(error => {
                     console.error('Error:', error);
                     document.getElementById('horarios-loading').style.display = 'none';
-                    document.getElementById('horarios-grid').innerHTML = 
-                        '<p style="grid-column: 1/-1; text-align: center; color: #c33;">Error al cargar horarios</p>';
-                    document.getElementById('horarios-grid').style.display = 'block';
+                    mostrarError('Error de conexión. Por favor intenta nuevamente.');
                 });
         }
 
@@ -416,6 +514,30 @@ $empleados = $stmt->fetchAll();
             grid.style.display = 'grid';
         }
 
+        function mostrarMensajeSinHorarios(mensaje) {
+            const mensajeDiv = document.getElementById('mensaje-info');
+            mensajeDiv.textContent = `ℹ️ ${mensaje}`;
+            mensajeDiv.style.display = 'block';
+            mensajeDiv.style.background = '#fef3c7';
+            mensajeDiv.style.borderColor = '#f59e0b';
+            
+            const grid = document.getElementById('horarios-grid');
+            grid.innerHTML = `
+                <p style="grid-column: 1/-1; text-align: center; color: #92400e; padding: 20px;">
+                    Por favor selecciona otra fecha o empleado
+                </p>
+            `;
+            grid.style.display = 'block';
+        }
+
+        function mostrarError(mensaje) {
+            const mensajeDiv = document.getElementById('mensaje-info');
+            mensajeDiv.textContent = `❌ ${mensaje}`;
+            mensajeDiv.style.display = 'block';
+            mensajeDiv.style.background = '#fee';
+            mensajeDiv.style.borderColor = '#fcc';
+        }
+
         function seleccionarHora(hora, btn) {
             // Remover selección anterior
             document.querySelectorAll('.horario-btn').forEach(b => {
@@ -429,12 +551,46 @@ $empleados = $stmt->fetchAll();
             document.getElementById('btn-submit').disabled = false;
         }
 
-        // Validación del formulario
+        // Validación del formulario antes de enviar
         document.getElementById('form-agendar').addEventListener('submit', function(e) {
             if (!horaSeleccionada) {
                 e.preventDefault();
-                alert('Por favor selecciona un horario');
+                alert('⚠️ Por favor selecciona un horario disponible');
                 return false;
+            }
+
+            // Confirmación final
+            const empleado = document.getElementById('empleado_id').options[document.getElementById('empleado_id').selectedIndex].text;
+            const fecha = document.getElementById('fecha_cita').value;
+            
+            const confirmacion = confirm(
+                `¿Confirmas tu cita?\n\n` +
+                `👤 Profesional: ${empleado}\n` +
+                `📅 Fecha: ${fecha}\n` +
+                `🕐 Hora: ${horaSeleccionada}\n` +
+                `💰 Precio: $<?php echo number_format($servicio['precio'], 2); ?>`
+            );
+
+            if (!confirmacion) {
+                e.preventDefault();
+                return false;
+            }
+
+            // Deshabilitar botón para evitar doble envío
+            document.getElementById('btn-submit').disabled = true;
+            document.getElementById('btn-submit').textContent = 'Procesando...';
+        });
+
+        // Establecer fecha mínima como mañana si es muy tarde hoy
+        window.addEventListener('DOMContentLoaded', function() {
+            const now = new Date();
+            const hour = now.getHours();
+            
+            // Si son más de las 6 PM, establecer fecha mínima como mañana
+            if (hour >= 18) {
+                const tomorrow = new Date(now);
+                tomorrow.setDate(tomorrow.getDate() + 1);
+                document.getElementById('fecha_cita').min = tomorrow.toISOString().split('T')[0];
             }
         });
     </script>
