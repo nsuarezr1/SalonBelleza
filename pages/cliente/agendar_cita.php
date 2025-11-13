@@ -303,7 +303,7 @@ $empleados = $stmt->fetchAll();
 <body>
     <div class="header">
         <div class="header-content">
-            <h1>📅 Agendar Nueva Cita</h1>
+            <h1>Agendar Nueva Cita</h1>
             <a href="dashboard.php" class="btn-back">← Volver</a>
         </div>
     </div>
@@ -335,7 +335,7 @@ $empleados = $stmt->fetchAll();
         <?php if ($servicio): ?>
             <div class="form-container">
                 <div class="service-info">
-                    <h3>📋 Servicio Seleccionado</h3>
+                    <h3>Servicio Seleccionado</h3>
                     <p style="font-size: 18px; margin-top: 10px; font-weight: 600;">
                         <?php echo htmlspecialchars($servicio['nombre']); ?>
                     </p>
@@ -363,7 +363,7 @@ $empleados = $stmt->fetchAll();
 
                     <div class="form-group">
                         <label for="empleado_id">
-                            👤 Selecciona tu Profesional Preferido *
+                            Selecciona tu Profesional Preferido *
                         </label>
                         <select id="empleado_id" name="empleado_id" required onchange="resetearHorarios(); cargarHorarios()">
                             <option value="">-- Elige un profesional --</option>
@@ -380,7 +380,7 @@ $empleados = $stmt->fetchAll();
 
                     <div class="form-group">
                         <label for="fecha_cita">
-                            📆 Selecciona la Fecha *
+                            Selecciona la Fecha *
                         </label>
                         <input 
                             type="date" 
@@ -399,7 +399,7 @@ $empleados = $stmt->fetchAll();
                     <div id="horarios-container">
                         <div class="form-group">
                             <label>
-                                🕐 Horarios Disponibles *
+                                Horarios Disponibles *
                             </label>
                             <div id="horarios-loading" class="loading">
                                 Cargando horarios disponibles
@@ -413,7 +413,7 @@ $empleados = $stmt->fetchAll();
 
                     <div class="form-group">
                         <label for="notas">
-                            📝 Notas o Comentarios Especiales (Opcional)
+                            Notas o Comentarios Especiales (Opcional)
                         </label>
                         <textarea 
                             id="notas" 
@@ -480,7 +480,7 @@ $empleados = $stmt->fetchAll();
                             
                             // Mostrar mensaje informativo
                             const mensaje = document.getElementById('mensaje-info');
-                            mensaje.textContent = `✨ ${data.empleado} tiene ${data.horarios.length} horarios disponibles para este día`;
+                            mensaje.textContent = ` ${data.empleado} tiene ${data.horarios.length} horarios disponibles para este día`;
                             mensaje.style.display = 'block';
                         } else {
                             // No hay horarios disponibles
@@ -516,7 +516,7 @@ $empleados = $stmt->fetchAll();
 
         function mostrarMensajeSinHorarios(mensaje) {
             const mensajeDiv = document.getElementById('mensaje-info');
-            mensajeDiv.textContent = `ℹ️ ${mensaje}`;
+            mensajeDiv.textContent = `${mensaje}`;
             mensajeDiv.style.display = 'block';
             mensajeDiv.style.background = '#fef3c7';
             mensajeDiv.style.borderColor = '#f59e0b';
@@ -565,10 +565,10 @@ $empleados = $stmt->fetchAll();
             
             const confirmacion = confirm(
                 `¿Confirmas tu cita?\n\n` +
-                `👤 Profesional: ${empleado}\n` +
-                `📅 Fecha: ${fecha}\n` +
-                `🕐 Hora: ${horaSeleccionada}\n` +
-                `💰 Precio: $<?php echo number_format($servicio['precio'], 2); ?>`
+                `Profesional: ${empleado}\n` +
+                `Fecha: ${fecha}\n` +
+                `Hora: ${horaSeleccionada}\n` +
+                `Precio: $<?php echo number_format($servicio['precio'], 2); ?>`
             );
 
             if (!confirmacion) {
@@ -595,4 +595,6 @@ $empleados = $stmt->fetchAll();
         });
     </script>
 </body>
+<script src="//code.jivosite.com/widget/W5KU9pbkZi" async></script>
+
 </html>

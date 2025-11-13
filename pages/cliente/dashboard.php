@@ -251,7 +251,7 @@ $mis_citas = $stmt->fetchAll();
 <body>
     <div class="header">
         <div class="header-content">
-            <h1>💇‍♀️ Bienvenido al Salón</h1>
+            <h1>Bienvenido al Salón</h1>
             <div class="user-info">
                 <span>Hola, <strong><?php echo htmlspecialchars(obtenerNombreUsuario()); ?></strong></span>
                 <a href="../../auth/logout.php" class="logout-btn">Cerrar Sesión</a>
@@ -268,7 +268,7 @@ $mis_citas = $stmt->fetchAll();
 
         <!-- Servicios Disponibles -->
         <div class="section">
-            <h2>✨ Nuestros Servicios</h2>
+            <h2>Nuestros Servicios</h2>
             <div class="services-grid">
                 <?php foreach ($servicios as $servicio): ?>
                     <div class="service-card">
@@ -279,7 +279,7 @@ $mis_citas = $stmt->fetchAll();
                             <div class="service-duration">⏱️ <?php echo $servicio['duracion']; ?> min</div>
                         </div>
                         <button class="btn-agendar" onclick="agendarCita(<?php echo $servicio['id']; ?>)">
-                            📅 Agendar Cita
+                            Agendar Cita
                         </button>
                     </div>
                 <?php endforeach; ?>
@@ -288,7 +288,7 @@ $mis_citas = $stmt->fetchAll();
 
         <!-- Mis Citas -->
         <div class="section">
-            <h2>📋 Mis Citas</h2>
+            <h2>Mis Citas</h2>
             <?php if (count($mis_citas) > 0): ?>
                 <table>
                     <thead>
@@ -333,4 +333,6 @@ $mis_citas = $stmt->fetchAll();
         }
     </script>
 </body>
+<script src="//code.jivosite.com/widget/W5KU9pbkZi" async></script>
+
 </html>
